@@ -10,6 +10,17 @@
 
 ## Tasks
 
+###	Optimizing code
+
+*	Organize code in functions to call repeatedly in loops and with different parameters
+*	Save data from intermediary steps to reuse multiple times
+*	Save mapping of shuffled networks to later join with edges/nodes data 
+*	Save mapping of who is visible to whom to later join with edges/nodes data 
+
+###   Randomizing networks
+
+*	Randomize within teams, within cheaters and non-cheaters
+
 ###	Level of harm
 
 *	Test for different levels of harm (top 90, 80, 70, 60, 50, 40, 30, 20, 10%)
@@ -17,7 +28,7 @@
     * Indegree distribution – overall + cheater indegree
 * Test for multiple killings from cheaters 
     * 3-actor motifs (killed by 2 cheaters)
-    * 4-actor motifs (killed by 3 cheaters)
+    * (4-actor motifs (killed by 3 cheaters))
     * (Test for different levels of harm)
     
 ###	Observing cheaters
@@ -37,12 +48,5 @@
 * 2-actor motif with 1 killed-link and 2 observed-links
 * 3-actor motif with 1 killed-link and 2 observed-links (killed by one cheater, observed another)
 
-###	Other
-
-*	Robustness
-*	Optimize code for AWS
-    *	Write and test code locally
-    *	Consolidate loops
-    *	Save (mapping of) shuffled networks to reuse multiple times
 
 
