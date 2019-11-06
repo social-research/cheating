@@ -241,8 +241,8 @@ def get_legit_cases(records, period):
     """
     # Find cases which describe the given motif.
     legit_cases = spark.sql("""SELECT * FROM records 
-                               WHERE src_flag == 1 AND dst_flag == 1 AND m_date >= src_sd 
-                               AND m_date < dst_sd AND dst_sd != 'NA'""")
+                               WHERE dst_sd != 'NA' AND src_flag == 1 AND dst_flag == 1 AND m_date >= src_sd 
+                               AND m_date < dst_sd""")
     legit_cases.registerTempTable("legit_cases")
     
     legit_cases_df = legit_cases.toPandas()
@@ -259,7 +259,7 @@ def get_legit_cases(records, period):
     return res
 
 
-def get_cases_with_severe_harm(records, legit_cases, perc, period):
+def get_cases_with_severe_harm(records, legit_cases, perc):
     """This function gets the killings or observations in accordance with the motif 
        and the given level of harm.
        Args:
@@ -267,7 +267,6 @@ def get_cases_with_severe_harm(records, legit_cases, perc, period):
            legit_cases: Dataframe that contains the cases which describes the motif 
                         without considering the level of harm
            perc: Number between 0 and 100 which represents the percentage
-           period: Length of the transition period
        Returns:
            res: Dataframe that contains the cases in accordance with the motif
     """
@@ -297,7 +296,7 @@ def get_cases_with_severe_harm(records, legit_cases, perc, period):
     tab_with_damage.registerTempTable("tab_with_damage")
 
     # Among paths found above, find the cases where non-cheaters were harmed severly by cheating.
-    res = spark.sql("SELECT * FROM tab_with_damage WHERE damage == 1 AND period <= " + str(period))
+    res = spark.sql("SELECT * FROM tab_with_damage WHERE damage == 1")
 
     return res
 
@@ -400,3 +399,42 @@ def plot_dist_of_test_stats(num_of_motifs, test_stats_lst):
     plt.tight_layout()
     plt.show()
     
+
+### Functions for analysing the observation-based mechanism
+
+
+def add_level_of_harm(td, perc):
+    """This function checks whether a killing is critical or not 
+       in accordance with the given level of harm.
+       Args:
+           td: Dataframe that contains killings
+           perc: Number between 0 and 100 which represents the percentage
+       Returns:
+           res: Dataframe that contains the cases in accordance with the motif
+    """
+    # Count the number of rows (unique victims) for each match.
+    num_of_rows = spark.sql("SELECT mid, COUNT(*) AS num_rows FROM td GROUP BY mid ORDER BY mid")
+    num_of_rows.registerTempTable("num_of_rows")
+
+    fin_c_match_logs = spark.sql("""SELECT c.mid, src, src_bd, src_flag, dst, dst_bd, dst_flag, 
+                                    time, m_date, num_rows FROM td c JOIN num_of_rows n ON c.mid = n.mid""")
+    fin_c_match_logs.registerTempTable("fin_c_match_logs")
+
+    # Get the ranking of each victim for each match.
+    rank_tab = spark.sql("""SELECT mid, src, src_bd, src_flag, dst, dst_bd, dst_flag, time, m_date, num_rows, 
+                            RANK(dst) OVER (PARTITION BY mid ORDER BY time DESC) AS ranking 
+                            FROM fin_c_match_logs ORDER BY mid, time DESC""")
+    rank_tab.registerTempTable("rank_tab")
+
+    # Get victims who were killed after getting into the top 30 percent.
+    # The value of damage is one if the victim got killed after getting into the top 30 percent, and otherwise zero.
+    top_percent = spark.sql("SELECT mid, src, src_bd, src_flag, dst, dst_bd, dst_flag, time, m_date, " + 
+                            "CASE WHEN ((ranking + 1) / num_rows) > " + str(perc/100) + 
+                            " THEN 0 ELSE 1 END AS damage FROM rank_tab")
+    top_percent.registerTempTable("top_percent")
+
+    # Among paths found above, find the cases where non-cheaters were harmed severly by cheating.
+    res = spark.sql("SELECT mid, src, src_bd, src_flag, dst, dst_bd, dst_flag, time, m_date, damage FROM top_percent")
+
+    return res
+
