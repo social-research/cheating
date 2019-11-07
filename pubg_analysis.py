@@ -7,6 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
+
 sc = SparkContext.getOrCreate()
 spark = SparkSession(sc)
 
@@ -231,75 +232,104 @@ def get_avg_time_diff_between_kills(kill_logs):
 ### Functions for analysing the victimisation-based mechanism
 
 
-def get_legit_cases(records, period):
-    """This function gets the killings or observations in accordance with the motif.
+def add_level_of_harm(td, perc):
+    """This function checks whether a killing is critical or not 
+       in accordance with the given level of harm.
        Args:
-           records: Dataframe that contains kills or observations and player information
-           period: Length of the transition period
-       Returns:
-           res: Dataframe that contains the cases in accordance with the motif
-    """
-    # Find cases which describe the given motif.
-    legit_cases = spark.sql("""SELECT * FROM records 
-                               WHERE dst_sd != 'NA' AND src_flag == 1 AND dst_flag == 1 AND m_date >= src_sd 
-                               AND m_date < dst_sd""")
-    legit_cases.registerTempTable("legit_cases")
-    
-    legit_cases_df = legit_cases.toPandas()
-    legit_cases_df['m_date'] = pd.to_datetime(legit_cases['m_date'])
-    legit_cases_df['dst_sd'] = pd.to_datetime(legit_cases['dst_sd'])
-    legit_cases_df['period'] = (legit_cases_df['dst_sd'] - legit_cases_df['m_date']).astype('timedelta64[D]')
-    
-    legit_cases = spark.createDataFrame(legit_cases_df)
-    legit_cases.registerTempTable("legit_cases")
-
-    # Get the transitions from non-cheater to cheater that happened within the given period of time.
-    res = spark.sql("SELECT * FROM legit_cases WHERE period <= " + str(period))
-    
-    return res
-
-
-def get_cases_with_severe_harm(records, legit_cases, perc):
-    """This function gets the killings or observations in accordance with the motif 
-       and the given level of harm.
-       Args:
-           records: Dataframe that contains kills and player information
-           legit_cases: Dataframe that contains the cases which describes the motif 
-                        without considering the level of harm
+           td: Dataframe that contains killings
            perc: Number between 0 and 100 which represents the percentage
        Returns:
            res: Dataframe that contains the cases in accordance with the motif
     """
     # Count the number of rows (unique victims) for each match.
-    num_of_rows = spark.sql("SELECT mid, COUNT(*) AS num_rows FROM records GROUP BY mid ORDER BY mid")
+    num_of_rows = spark.sql("SELECT mid, COUNT(*) AS num_rows FROM td GROUP BY mid ORDER BY mid")
     num_of_rows.registerTempTable("num_of_rows")
 
-    fin_c_match_logs = spark.sql("""SELECT c.mid, src, src_flag, dst, dst_flag, time, num_rows 
-                                    FROM records c JOIN num_of_rows n ON c.mid = n.mid""")
+    fin_c_match_logs = spark.sql("""SELECT c.mid, src, src_bd, src_flag, dst, dst_bd, dst_flag, 
+                                    time, m_date, num_rows FROM td c JOIN num_of_rows n ON c.mid = n.mid""")
     fin_c_match_logs.registerTempTable("fin_c_match_logs")
 
     # Get the ranking of each victim for each match.
-    rank_tab = spark.sql("""SELECT mid, src, src_flag, dst, dst_flag, time, num_rows, 
+    rank_tab = spark.sql("""SELECT mid, src, src_bd, src_flag, dst, dst_bd, dst_flag, time, m_date, num_rows, 
                             RANK(dst) OVER (PARTITION BY mid ORDER BY time DESC) AS ranking 
                             FROM fin_c_match_logs ORDER BY mid, time DESC""")
     rank_tab.registerTempTable("rank_tab")
 
     # Get victims who were killed after getting into the top 30 percent.
     # The value of damage is one if the victim got killed after getting into the top 30 percent, and otherwise zero.
-    top_percent = spark.sql("SELECT mid, src, dst, time, num_rows, ranking, CASE WHEN ((ranking + 1) / num_rows) > " + 
-                            str(perc/100) + " THEN 0 ELSE 1 END AS damage FROM rank_tab")
+    top_percent = spark.sql("SELECT mid, src, src_bd, src_flag, dst, dst_bd, dst_flag, time, m_date, " + 
+                            "CASE WHEN ((ranking + 1) / num_rows) > " + str(perc/100) + 
+                            " THEN 0 ELSE 1 END AS damage FROM rank_tab")
     top_percent.registerTempTable("top_percent")
 
-    # Add the information about damage into the cases above.
-    tab_with_damage = spark.sql("""SELECT l.mid, l.src, l.dst, l.time, l.period, damage 
-                                   FROM legit_cases l JOIN top_percent t ON l.mid = t.mid AND l.dst = t.dst""")
-    tab_with_damage.registerTempTable("tab_with_damage")
-
     # Among paths found above, find the cases where non-cheaters were harmed severly by cheating.
-    res = spark.sql("SELECT * FROM tab_with_damage WHERE damage == 1")
+    res = spark.sql("SELECT mid, src, src_bd, src_flag, dst, dst_bd, dst_flag, time, m_date, damage FROM top_percent")
 
     return res
 
+
+def find_legit_cases(new_td, nodes):
+    """This function collects the cases where players become cheaters after being killed by cheating.
+       Args:
+           new_td: Dataframe that contains killings and the level of harm for each killing
+           nodes: Table (dataframe) that contains player data
+       Returns:
+           legit_cases: Dataframe that contains the cases in accordance with the motif
+    """
+    # First, add information of killers.
+    src_info = spark.sql("""SELECT mid, src, start_date AS src_sd, src_bd, src_flag, 
+                            dst, dst_bd, dst_flag, time, m_date, damage 
+                            FROM new_td t JOIN nodes n ON t.src = n.id""")
+    src_info.registerTempTable("src_info")
+
+    # Add information of victims.
+    full_info = spark.sql("""SELECT mid, src, src_sd, src_bd, src_flag, 
+                             dst, start_date AS dst_sd, dst_bd, dst_flag, time, m_date, damage 
+                             FROM src_info s JOIN nodes n ON s.dst = n.id""")
+    full_info.registerTempTable("full_info")
+
+    # Find the cases where players adopt cheating after being killed by a cheater.
+    legit_cases = spark.sql("""SELECT * FROM full_info WHERE dst_sd != 'NA' AND src_flag == 1 
+                               AND dst_flag == 1 AND m_date >= src_sd AND m_date < dst_sd""")
+ 
+    return legit_cases
+
+
+def get_vic_summary_tab(legit_cases):
+    """This function returns a summary table for the victimisation-based mechanism.
+       Args:
+           legit_cases: Dataframe that contains the cases in accordance with the motif
+       Returns:
+           add_dates: Dataframe that contains the total number of victimisation experiences 
+                      and the number of unique killers.
+    """
+    # Get the summary data by date for each cheater.
+    victims_tab = spark.sql("""SELECT dst AS id, 
+                               TO_DATE(CAST(UNIX_TIMESTAMP(dst_sd, 'yyyy-MM-dd') AS TIMESTAMP)) AS start_date, 
+                               TO_DATE(CAST(UNIX_TIMESTAMP(m_date, 'yyyy-MM-dd') AS TIMESTAMP)) AS m_date, 
+                               CAST(DATEDIFF(dst_sd, m_date) AS INT) AS period, src AS killer, 
+                               COUNT(*) AS exp, SUM(damage) AS sev_exp FROM legit_cases
+                               GROUP BY dst, dst_sd, m_date, src""")
+    victims_tab.registerTempTable("victims_tab")
+
+    # Get the date when the player was first killed by cheating.
+    first_m_dates = spark.sql("""SELECT * 
+                                 FROM (SELECT id, m_date, period, ROW_NUMBER() OVER (PARTITION BY id ORDER BY m_date) 
+                                 AS rownumber FROM victims_tab) WHERE rownumber IN (1)""")
+    first_m_dates.registerTempTable("first_m_dates")
+    
+    # Get the table that contains the total number of victimisation experiences and the number of unique cheaters.
+    vic_info = spark.sql("""SELECT id, start_date, SUM(exp) AS total_exp, SUM(sev_exp) AS total_sev_exp, 
+                            COUNT(DISTINCT killer) AS uniq_killers 
+                            FROM victims_tab GROUP BY id, start_date""")
+    vic_info.registerTempTable("vic_info")
+
+    add_dates = spark.sql("""SELECT v.id, v.start_date, f.m_date, f.period, 
+                             v.total_exp, v.total_sev_exp, v.uniq_killers 
+                             FROM vic_info v LEFT JOIN first_m_dates f ON v.id = f.id""")
+    
+    return add_dates 
+    
 
 def with_column_index(sdf):
     """This function adds an index column to the given dataframe.
@@ -401,40 +431,104 @@ def plot_dist_of_test_stats(num_of_motifs, test_stats_lst):
     
 
 ### Functions for analysing the observation-based mechanism
+    
 
-
-def add_level_of_harm(td, perc):
-    """This function checks whether a killing is critical or not 
-       in accordance with the given level of harm.
+def add_more_info(new_td, nodes):
+    """This function adds more information such as the start dates of cheating adoption 
+       and cheating flags to the telemetry data.
        Args:
-           td: Dataframe that contains killings
-           perc: Number between 0 and 100 which represents the percentage
+           new_td: Dataframe that contains killings and the level of harm for each killing
+           nodes: Table (dataframe) that contains player data
        Returns:
-           res: Dataframe that contains the cases in accordance with the motif
+           records: Dataframe that contains the cases in accordance with the motif
     """
-    # Count the number of rows (unique victims) for each match.
-    num_of_rows = spark.sql("SELECT mid, COUNT(*) AS num_rows FROM td GROUP BY mid ORDER BY mid")
-    num_of_rows.registerTempTable("num_of_rows")
+    # First, add information of killers.
+    src_info = spark.sql("""SELECT mid, src, start_date AS src_sd, src_bd, src_flag, 
+                            dst, dst_bd, dst_flag, time, m_date, damage 
+                            FROM new_td t JOIN nodes n ON t.src = n.id""")
+    src_info.registerTempTable("src_info")
 
-    fin_c_match_logs = spark.sql("""SELECT c.mid, src, src_bd, src_flag, dst, dst_bd, dst_flag, 
-                                    time, m_date, num_rows FROM td c JOIN num_of_rows n ON c.mid = n.mid""")
-    fin_c_match_logs.registerTempTable("fin_c_match_logs")
+    # Add information of victims.
+    full_info = spark.sql("""SELECT mid, src, src_sd, src_bd, src_flag, 
+                             dst, start_date AS dst_sd, dst_bd, dst_flag, time, m_date, damage 
+                             FROM src_info s JOIN nodes n ON s.dst = n.id""")
+    full_info.registerTempTable("full_info")
 
-    # Get the ranking of each victim for each match.
-    rank_tab = spark.sql("""SELECT mid, src, src_bd, src_flag, dst, dst_bd, dst_flag, time, m_date, num_rows, 
-                            RANK(dst) OVER (PARTITION BY mid ORDER BY time DESC) AS ranking 
-                            FROM fin_c_match_logs ORDER BY mid, time DESC""")
-    rank_tab.registerTempTable("rank_tab")
+    # Add information of cheaters.
+    add_flags = spark.sql("""SELECT mid, src, src_sd, src_bd, src_flag,
+                             CASE WHEN src_bd >= m_date AND src_sd <= m_date 
+                             AND src_flag == 1 THEN 1 ELSE 0 END AS src_curr_flag, 
+                             dst, dst_sd, dst_bd, dst_flag,
+                             CASE WHEN dst_bd >= m_date AND dst_sd <= m_date 
+                             AND dst_flag == 1 THEN 1 ELSE 0 END AS dst_curr_flag, time, m_date, damage 
+                             FROM full_info ORDER BY mid, time""")
+    add_flags.registerTempTable("add_flags")
 
-    # Get victims who were killed after getting into the top 30 percent.
-    # The value of damage is one if the victim got killed after getting into the top 30 percent, and otherwise zero.
-    top_percent = spark.sql("SELECT mid, src, src_bd, src_flag, dst, dst_bd, dst_flag, time, m_date, " + 
-                            "CASE WHEN ((ranking + 1) / num_rows) > " + str(perc/100) + 
-                            " THEN 0 ELSE 1 END AS damage FROM rank_tab")
-    top_percent.registerTempTable("top_percent")
+    legit_matches = spark.sql("""SELECT mid 
+                                 FROM (SELECT mid, SUM(src_curr_flag) AS c_kills FROM add_flags GROUP BY mid) 
+                                 WHERE c_kills > 0""")
+    legit_matches.registerTempTable("legit_matches")
 
-    # Among paths found above, find the cases where non-cheaters were harmed severly by cheating.
-    res = spark.sql("SELECT mid, src, src_bd, src_flag, dst, dst_bd, dst_flag, time, m_date, damage FROM top_percent")
+    records = spark.sql("""SELECT r.mid, src, src_sd, src_bd, src_flag, src_curr_flag, 
+                           dst, dst_sd, dst_bd, dst_flag, dst_curr_flag, time, m_date, damage 
+                           FROM add_flags r JOIN legit_matches l ON r.mid = l.mid""")
+    records.registerTempTable("records")
+    records = spark.sql("SELECT *, ROW_NUMBER() OVER (PARTITION BY mid ORDER BY time) AS aid FROM records")
+    
+    return records
 
-    return res
+
+def get_obs_summary_tab(records):
+    """This function returns a summary table for the observation-based mechanism.
+       Args:
+           records: Dataframe that contains killings
+       Returns:
+           add_dates: Dataframe that contains the total number of observations
+                      and the number of unique cheaters.
+    """
+    # Get a list of killings done by cheaters.
+    kills_done_by_cheaters = spark.sql("""SELECT mid, src AS killer, time, aid FROM records 
+                                          WHERE src_curr_flag = 1""")
+    kills_done_by_cheaters.registerTempTable("kills_done_by_cheaters")
+
+    # Get a table of players (both killers and victims) who observed killings done by cheaters when they were alive.
+    observers_tab = spark.sql("""SELECT id, 
+                                 TO_DATE(CAST(UNIX_TIMESTAMP(start_date, 'yyyy-MM-dd') AS TIMESTAMP)) AS start_date, 
+                                 TO_DATE(CAST(UNIX_TIMESTAMP(m_date, 'yyyy-MM-dd') AS TIMESTAMP)) AS m_date, 
+                                 CAST(DATEDIFF(start_date, m_date) AS INT) AS period, killer, 
+                                 COUNT(*) AS obs, SUM(damage) AS sev_dam 
+                                 FROM (SELECT s.mid, s.src AS id, s.src_sd AS start_date, s.src_bd, k.time, s.m_date, 
+                                 s.damage, k.killer, k.aid 
+                                 FROM records s LEFT JOIN kills_done_by_cheaters k ON s.mid = k.mid AND s.aid < k.aid 
+                                 WHERE src_flag == 1 AND src_sd != 'NA' AND src != killer AND src_curr_flag == 0
+                                 UNION
+                                 SELECT s.mid, s.src AS id, s.src_sd, s.src_bd, k.time, s.m_date, 
+                                 s.damage, k.killer, k.aid 
+                                 FROM records s LEFT JOIN kills_done_by_cheaters k ON s.mid = k.mid AND s.aid > k.aid 
+                                 WHERE src_flag == 1 AND src_sd != 'NA' AND src != killer AND src_curr_flag == 0
+                                 UNION
+                                 SELECT s.mid, s.dst AS id, s.dst_sd, s.dst_bd, k.time, s.m_date, 
+                                 s.damage, k.killer, k.aid 
+                                 FROM records s LEFT JOIN kills_done_by_cheaters k ON s.mid = k.mid AND s.aid > k.aid 
+                                 WHERE dst_flag == 1 AND dst_sd != 'NA' AND dst != killer AND dst_curr_flag == 0) 
+                                 GROUP BY id, start_date, m_date, killer""")
+    observers_tab.registerTempTable("observers_tab")
+
+    # Get the table that contains the total number of observations and the number of unique cheaters.
+    obs_info = spark.sql("""SELECT id, start_date, SUM(obs) AS total_obs, SUM(sev_dam) AS total_sev_dam, 
+                            COUNT(DISTINCT killer) AS uniq_cheaters FROM observers_tab 
+                            GROUP BY id, start_date""")
+    obs_info.registerTempTable("obs_info")
+    
+    # Get the date when the player first observed cheating.
+    first_m_dates = spark.sql("""SELECT * 
+                                 FROM (SELECT id, m_date, period, ROW_NUMBER() OVER (PARTITION BY id ORDER BY m_date) 
+                                 AS rownumber FROM observers_tab) WHERE rownumber IN (1)""")
+    first_m_dates.registerTempTable("first_m_dates")
+    
+    add_dates = spark.sql("""SELECT o.id, o.start_date, f.m_date, f.period, 
+                         o.total_obs, o.total_sev_dam, o.uniq_cheaters 
+                         FROM obs_info o LEFT JOIN first_m_dates f ON o.id = f.id""")
+    
+    return add_dates
 
