@@ -23,7 +23,7 @@ def clean_edges(table_name):
        Returns:
            cleaned_logs: Kill records without invalid records and matches in special mode
     """
-    path_to_file = "s3://jinny-capstone-data-test/telemetry_data/" + table_name + "_edges.txt"
+    path_to_file = "s3://social-research-cheating/raw-data/" + table_name + "_edges.txt"
     
     # Define the structure of telemetry data.
     edgeSchema = StructType([StructField("mid", StringType(), True),
@@ -61,14 +61,13 @@ def clean_edges(table_name):
     return cleaned_logs
 
 
-def combine_telemetry_data(day, num_of_files):
+def combine_telemetry_data(day, num_of_files, PATH_TO_DATA):
     """This function combines all telemetry files into one parquet file.
        Args:
            day: Day of the date when matches were played
            num_of_files: The total number of files that store kill records created on the given date
+           PATH_TO_DATA: Path to raw data
     """
-    PATH_TO_DATA = "s3://jinny-capstone-data-test/raw_td.parquet"
-
     if day == 1:
         # Create the first parquet file.
         cleaned_tab = clean_edges("td_day_1_1")
@@ -90,7 +89,7 @@ def get_participants(table_name):
        Returns:
            participants: Dataframe that contains the team IDs of players for all teamplay matches.
     """
-    path_to_file = "s3://jinny-capstone-data-test/telemetry_data/team_data/" + table_name + "_edges.txt"
+    path_to_file = "s3://social-research-cheating/team-data/" + table_name + "_edges.txt"
     
     # Define the structure of team membership data.
     edgeSchema = StructType([StructField("mid", StringType(), True),
@@ -111,15 +110,14 @@ def get_participants(table_name):
     return participants
 
 
-def combine_team_data(day, num_of_files):
+def combine_team_data(day, num_of_files, PATH_TO_DATA):
     """This function combines all team membership data files into one parquet file.
        Args:
            day: Day of the date when matches were played
            num_of_files: The total number of files that store team membership information 
                          created on the given date
+           PATH_TO_DATA: Path to the data that contains team membership information
     """
-    PATH_TO_DATA = "s3://jinny-capstone-data-test/team_data.parquet"
-
     if day == 1:
         # Create the first parquet file.
         team_data = get_participants("md_day_1_1")
@@ -133,14 +131,14 @@ def combine_team_data(day, num_of_files):
             new_team_data.write.mode("append").parquet(PATH_TO_DATA)
             
 
-def create_data_for_obs_mech(file_path, players):
+def create_data_for_obs_mech(PATH_TO_DATA, players):
     """This function creates a dataset that contains the killing records of matches 
        where cheaters killed at least one player including self-loops.
        Args:
-           file_path: Path to a raw dataset in the S3 bucket
+           PATH_TO_DATA: Path to a raw dataset in the S3 bucket
            players: Table (dataframe) that contains player data
     """
-    spark.read.parquet(file_path).createOrReplaceTempView("raw_data")
+    spark.read.parquet(PATH_TO_DATA).createOrReplaceTempView("raw_data")
     
     # Add cheating flags of killers and those of victims.
     # First, add cheating flags of killers.
@@ -161,7 +159,7 @@ def create_data_for_obs_mech(file_path, players):
     # Extract the records of matches where at least one cheater took part in.
     legit_logs = spark.sql("""SELECT e.mid, src, src_bd, src_flag, dst, dst_bd, dst_flag, time, m_date 
                               FROM edges e JOIN legit_mids l ON e.mid = l.mid""")
-    legit_logs.write.parquet("s3://jinny-capstone-data-test/data_for_obs_mech.parquet")
+    legit_logs.write.parquet("s3://social-research-cheating/obs_mech_data.parquet")
     
 
 ### Functions for analysing cheaters and comparing them with non-cheaters
@@ -222,7 +220,7 @@ def get_avg_time_diff_between_kills(kill_logs):
                          ORDER BY src, mid, time""")
     tdiff.registerTempTable("tdiff")
 
-    avg_kill_intervals = spark.sql("""SELECT src, AVG(tsdiff) AS delta  FROM tdiff WHERE tsdiff IS NOT NULL 
+    avg_kill_intervals = spark.sql("""SELECT src AS id, AVG(tsdiff) AS delta  FROM tdiff WHERE tsdiff IS NOT NULL 
                                       GROUP BY src""")
     avg_kill_intervals_df = avg_kill_intervals.toPandas()
 
