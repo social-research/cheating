@@ -398,34 +398,6 @@ def permute_node_labels(raw_td, nodes, team_ids):
                            FROM join_on_index ORDER BY mid""")
     
     return mapping
-
-
-def plot_dist_of_test_stats(num_of_motifs, test_stats_lst):
-    """This function plots the distribution of the given test statistics.
-       Args:
-           num_of_motifs: Number of motifs on the empirical network
-           test_stats_lst: List of test statistics from randomised networks
-    """
-    test_df = pd.DataFrame(test_stats_lst)
-    test_df.columns = ['z-scores']
-    zscore_df = (test_df - test_df.mean())/test_df.std(ddof=0)
-
-    rand_mean = test_df.mean()
-    rand_std = test_df.std(ddof=0)
-    observed_stat = (num_of_motifs - rand_mean) / rand_std
-    observed_stat = round(float(np.float64(observed_stat)), 4)
-
-    bins = np.arange(0, zscore_df['z-scores'].max() + 1.5) - 0.5
-    fig = zscore_df.hist(column='z-scores', histtype='step', bins=20)
-    plt.xlabel("Test statistics")
-    plt.ylabel("Frequency")
-    plt.axvline(observed_stat, color='r', linewidth=2)
-    # plt.xlim(xmin=-4)
-    # plt.xlim(xmax=4)
-    # plt.ylim(ymax=20)
-    plt.title("")
-    plt.tight_layout()
-    plt.show()
     
 
 ### Functions for analysing the observation-based mechanism
@@ -514,7 +486,9 @@ def get_obs_summary_tab(records):
 
     # Get the table that contains the total number of observations and the number of unique cheaters.
     obs_info = spark.sql("""SELECT id, start_date, SUM(obs) AS total_obs, SUM(sev_dam) AS total_sev_dam, 
-                            COUNT(DISTINCT killer) AS uniq_cheaters FROM observers_tab 
+                            SUM(CASE WHEN obs >= 10 THEN 1 ELSE 0 END) AS total_cheaters, 
+                            SUM(CASE WHEN obs >= 10 AND sev_dam > 0 THEN 1 ELSE 0 END) AS sev_cheaters 
+                            FROM observers_tab
                             GROUP BY id, start_date""")
     obs_info.registerTempTable("obs_info")
     
@@ -525,8 +499,8 @@ def get_obs_summary_tab(records):
     first_m_dates.registerTempTable("first_m_dates")
     
     add_dates = spark.sql("""SELECT o.id, o.start_date, f.m_date, f.period, 
-                         o.total_obs, o.total_sev_dam, o.uniq_cheaters 
-                         FROM obs_info o LEFT JOIN first_m_dates f ON o.id = f.id""")
+                             o.total_obs, o.total_sev_dam, o.total_cheaters, o.sev_cheaters 
+                             FROM obs_info o LEFT JOIN first_m_dates f ON o.id = f.id""")
     
     return add_dates
 
