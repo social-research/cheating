@@ -26,12 +26,12 @@ rownames(permuted_list) <- 1:nrow(permuted_list)
 node_list$rand_id = permuted_list$new_id
 
 edge_list = merge(edge_list, node_list, 
-                  by.x="src", by.y="id")[, c("new_id", "dst", "time")]
-colnames(edge_list) <- c("src", "dst", "time")
+                  by.x="src", by.y="id")[, c("new_id", "dst", "time", "color")]
+colnames(edge_list) <- c("src", "dst", "time", "color")
 
 edge_list = merge(edge_list, node_list, 
-                  by.x="dst", by.y="id")[, c("src", "new_id", "time")]
-colnames(edge_list) <- c("src", "dst", "time")
+                  by.x="dst", by.y="id")[, c("src", "new_id", "time", "color")]
+colnames(edge_list) <- c("src", "dst", "time", "color")
 
 # Sort the kills (edges) by time.
 edge_list = edge_list[order(edge_list$time), ]
@@ -48,9 +48,7 @@ V(td_net)$tid <- node_list$tid
 E(td_net)$weight <- 1:nrow(edge_list)
 
 colors <- inlmisc::GetColors(max(node_list$tid), scheme = "smooth rainbow")
-lab_colors <- c("black", "red")
-node_shape <- c("circle", "square")
-node_size <- c(8, 7)
+frame_col <- c("black", "red")
 
 num_of_edges <- nrow(edge_list)
 edge_colors <- GetColors(num_of_edges, scheme = "smooth rainbow", 
@@ -59,36 +57,36 @@ edge_colors <- GetColors(num_of_edges, scheme = "smooth rainbow",
 # frlay <- layout.fruchterman.reingold(td_net)
 
 # Create two plots and save them as an image file.
-png("figs/net_viz/net_viz_3.png", 
+png("figs/net_viz/vic_net.png", 
      width=20, height=10, 
      units='in', res=300)
 
 par(mfrow = c(1, 2), mar = c(0, 1, 2, 1))
 
-plot(td_net, 
+plot(td_net,
+     loops = TRUE,
+     vertex.size = 7,
      vertex.color = adjustcolor(colors[node_list$tid], alpha.f = 0.7), 
-     vertex.size = node_size[node_list$flag + 1], 
      edge.width = (E(td_net)$weight/100) * 5, 
      edge.arrow.size = 0.4 + (E(td_net)$weight/5),
-     edge.color = adjustcolor(edge_colors),
+     edge.color = adjustcolor(frame_col[edge_list$color], alpha.f = 0.8), 
      vertex.label = V(td_net)$name,
-     vertex.label.color = lab_colors[node_list$flag + 1],
-     vertex.shape = node_shape[node_list$flag + 1],
+     vertex.label.color = ifelse(V(td_net)$name >= 78, "white", "black"),
      layout = frlay, 
      vertex.label.cex = 1)
-title("Original", cex.main=1)
+title("Original", cex.main = 2)
 
-plot(td_net, 
+plot(td_net,
+     loops = TRUE,
+     vertex.size = 7,
      vertex.color = adjustcolor(colors[node_list$tid], alpha.f = 0.7), 
-     vertex.size = node_size[node_list$flag + 1],
      edge.width = (E(td_net)$weight/100) * 5, 
      edge.arrow.size = 0.4 + (E(td_net)$weight/5),
-     edge.color = adjustcolor(edge_colors),
+     edge.color = adjustcolor(frame_col[edge_list$color], alpha.f = 0.8), 
      vertex.label = V(td_net)$rand_name,
-     vertex.label.color = lab_colors[node_list$flag + 1],
-     vertex.shape = node_shape[node_list$flag + 1],
+     vertex.label.color = ifelse(V(td_net)$rand_name >= 78, "white", "black"),
      layout = frlay, 
      vertex.label.cex = 1)
-title("Permutation", cex.main=1)
+title("Permutation", cex.main = 2)
 
 dev.off()
