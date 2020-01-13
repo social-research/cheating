@@ -103,8 +103,9 @@ def get_participants(table_name):
     # Read edges from the S3 bucket and create a local table.
     data = spark.read.options(header='false', delimiter='\t').schema(edgeSchema).csv(path_to_file)
     data.registerTempTable("data")
-    participants = spark.sql("""SELECT * FROM (SELECT mid, src AS id, tid FROM data 
-                                UNION SELECT mid, dst, tid FROM data)""")
+    participants = spark.sql("""SELECT mid, src AS id, tid FROM data 
+                                UNION 
+                                SELECT mid, dst, tid FROM data""")
     
     return participants
 
@@ -128,6 +129,33 @@ def combine_team_data(day, num_of_files, PATH_TO_DATA):
         for i in range(1, num_of_files+1):
             new_team_data = get_participants("md_day_" + str(day) + "_" + str(i))
             new_team_data.write.mode("append").parquet(PATH_TO_DATA)
+
+
+def get_team_ranks(table_name):
+    """This function creates a table that contains the ranks of teams for all teamplay matches.
+       Args:
+           table_name: Name of a table that contains raw team membership data
+       Returns:
+           ranks: Dataframe that contains the ranks of teams for all teamplay matches.
+    """
+    path_to_file = "s3://social-research-cheating/raw_text_files/team_data/" + table_name + "_edges.txt"
+    
+    # Define the structure of team membership data.
+    edgeSchema = StructType([StructField("mid", StringType(), True),
+                             StructField("src", StringType(), True),
+                             StructField("dst", StringType(), True),
+                             StructField("tid", StringType(), True),
+                             StructField("time", TimestampType(), True),
+                             StructField("mod", StringType(), True),
+                             StructField("rank", IntegerType(), True),
+                             StructField("m_date", StringType(), True)])
+    
+    # Read edges from the S3 bucket and create a local table.
+    data = spark.read.options(header='false', delimiter='\t').schema(edgeSchema).csv(path_to_file)
+    data.registerTempTable("data")
+    ranks = spark.sql("SELECT DISTINCT mid, tid, mod, rank, m_date FROM data")
+    
+    return ranks
             
 
 def get_obs_data(PATH_TO_DATA, players):
@@ -170,6 +198,63 @@ def get_obs_data(PATH_TO_DATA, players):
                               FROM edges e JOIN legit_mids l ON e.mid = l.mid""")
     legit_logs.write.parquet("s3://social-research-cheating/edges/obs_data.parquet")
     
+
+def get_sum_of_winners(obs_data, team_ids, players):
+    """This function creates a summary table that contains the number of potential cheaters and
+       checks whether winners have the same team ID for each teamplay match.
+       Args:
+           obs_data: Killings of the matches where at least one potential cheater played
+           team_ids: Dataframe that contains the team IDs of players
+           players: Dataframe that contains the player data
+       Returns:
+           summary_tab: Dataframe that contains the number of potential cheaters and 
+                        number of winning teams with different team IDs
+    """
+    # Get a list of mids and m_dates.
+    match_info = spark.sql("SELECT DISTINCT mid, m_date FROM obs_data")
+    match_info.registerTempTable("match_info")
+
+    # Get a list of victims for each match.
+    victims = spark.sql("SELECT DISTINCT mid, dst FROM obs_data")
+    victims.registerTempTable("victims")
+    
+    # Get a list of winners for each match.
+    winners = spark.sql("""SELECT DISTINCT o.mid, src FROM obs_data o 
+                           WHERE NOT EXISTS (SELECT mid, dst FROM victims v WHERE o.mid = v.mid AND o.src = v.dst)""")
+    winners.registerTempTable("winners")
+
+    # Add team information.
+    add_tids = spark.sql("""SELECT w.mid, src, CASE WHEN tid IS NULL THEN 'NA' ELSE tid END AS src_tid
+                            FROM winners w LEFT JOIN team_ids t ON w.mid = t.mid AND w.src = t.id""")
+    add_tids.registerTempTable("add_tids")
+
+    # Add m_dates.
+    temp_tab = spark.sql("""SELECT a.mid, src, src_tid, m_date 
+                            FROM add_tids a LEFT JOIN match_info m ON a.mid = m.mid""")
+    temp_tab.registerTempTable("temp_tab")
+    
+    # Find the matches where at least one winner's team ID is 'NA'.
+    na_tids = spark.sql("SELECT DISTINCT mid FROM add_tids WHERE src_tid = 'NA'")
+    na_tids.registerTempTable("na_tids")
+
+    # Add the current cheating flag of players.
+    winners = spark.sql("""SELECT t.*, 
+                           CASE WHEN cheating_flag = 1 AND m_date < start_date THEN 1 ELSE 0 END AS pot_flag 
+                           FROM temp_tab t LEFT JOIN players p ON t.src = p.id""")
+    winners.registerTempTable("winners")
+
+    # Count the number of winners and that of unique times for each match. 
+    cnt_tab = spark.sql("""SELECT mid, COUNT(src) AS winner_cnt, 
+                           COUNT(DISTINCT src_tid) AS tid_cnt, SUM(pot_flag) AS pot_cnt 
+                           FROM winners GROUP BY mid""")
+    cnt_tab.registerTempTable("cnt_tab")
+    
+    summary_tab = spark.sql("""SELECT c.mid, winner_cnt, tid_cnt, pot_cnt, 
+                               CASE WHEN n.mid IS NULL THEN 0 ELSE 1 END AS na_flag 
+                               FROM cnt_tab c LEFT JOIN na_tids n ON c.mid = n.mid""")
+    
+    return summary_tab
+
 
 ### Functions that analyze cheaters and compare them with non-cheaters
 
@@ -229,7 +314,8 @@ def get_avg_time_diff_between_kills(kill_logs):
                          ORDER BY src, mid, time""")
     tdiff.registerTempTable("tdiff")
 
-    avg_kill_intervals = spark.sql("""SELECT src AS id, AVG(tsdiff) AS delta  FROM tdiff WHERE tsdiff IS NOT NULL 
+    avg_kill_intervals = spark.sql("""SELECT src AS id, AVG(tsdiff) AS delta  
+                                      FROM tdiff WHERE tsdiff IS NOT NULL 
                                       GROUP BY src""")
     avg_kill_intervals_df = avg_kill_intervals.toPandas()
 
