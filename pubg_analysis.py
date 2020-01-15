@@ -197,63 +197,6 @@ def get_obs_data(PATH_TO_DATA, players):
                               dst, dst_sd, dst_bd, dst_curr_flag, dst_flag, time, m_date 
                               FROM edges e JOIN legit_mids l ON e.mid = l.mid""")
     legit_logs.write.parquet("s3://social-research-cheating/edges/obs_data.parquet")
-    
-
-def get_sum_of_winners(obs_data, team_ids, players):
-    """This function creates a summary table that contains the number of potential cheaters and
-       checks whether winners have the same team ID for each teamplay match.
-       Args:
-           obs_data: Killings of the matches where at least one potential cheater played
-           team_ids: Dataframe that contains the team IDs of players
-           players: Dataframe that contains the player data
-       Returns:
-           summary_tab: Dataframe that contains the number of potential cheaters and 
-                        number of winning teams with different team IDs
-    """
-    # Get a list of mids and m_dates.
-    match_info = spark.sql("SELECT DISTINCT mid, m_date FROM obs_data")
-    match_info.registerTempTable("match_info")
-
-    # Get a list of victims for each match.
-    victims = spark.sql("SELECT DISTINCT mid, dst FROM obs_data")
-    victims.registerTempTable("victims")
-    
-    # Get a list of winners for each match.
-    winners = spark.sql("""SELECT DISTINCT o.mid, src FROM obs_data o 
-                           WHERE NOT EXISTS (SELECT mid, dst FROM victims v WHERE o.mid = v.mid AND o.src = v.dst)""")
-    winners.registerTempTable("winners")
-
-    # Add team information.
-    add_tids = spark.sql("""SELECT w.mid, src, CASE WHEN tid IS NULL THEN 'NA' ELSE tid END AS src_tid
-                            FROM winners w LEFT JOIN team_ids t ON w.mid = t.mid AND w.src = t.id""")
-    add_tids.registerTempTable("add_tids")
-
-    # Add m_dates.
-    temp_tab = spark.sql("""SELECT a.mid, src, src_tid, m_date 
-                            FROM add_tids a LEFT JOIN match_info m ON a.mid = m.mid""")
-    temp_tab.registerTempTable("temp_tab")
-    
-    # Find the matches where at least one winner's team ID is 'NA'.
-    na_tids = spark.sql("SELECT DISTINCT mid FROM add_tids WHERE src_tid = 'NA'")
-    na_tids.registerTempTable("na_tids")
-
-    # Add the current cheating flag of players.
-    winners = spark.sql("""SELECT t.*, 
-                           CASE WHEN cheating_flag = 1 AND m_date < start_date THEN 1 ELSE 0 END AS pot_flag 
-                           FROM temp_tab t LEFT JOIN players p ON t.src = p.id""")
-    winners.registerTempTable("winners")
-
-    # Count the number of winners and that of unique times for each match. 
-    cnt_tab = spark.sql("""SELECT mid, COUNT(src) AS winner_cnt, 
-                           COUNT(DISTINCT src_tid) AS tid_cnt, SUM(pot_flag) AS pot_cnt 
-                           FROM winners GROUP BY mid""")
-    cnt_tab.registerTempTable("cnt_tab")
-    
-    summary_tab = spark.sql("""SELECT c.mid, winner_cnt, tid_cnt, pot_cnt, 
-                               CASE WHEN n.mid IS NULL THEN 0 ELSE 1 END AS na_flag 
-                               FROM cnt_tab c LEFT JOIN na_tids n ON c.mid = n.mid""")
-    
-    return summary_tab
 
 
 ### Functions that analyze cheaters and compare them with non-cheaters
