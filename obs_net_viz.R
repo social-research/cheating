@@ -35,6 +35,8 @@ full_edge_list = merge(full_edge_list, node_list,
                   by.x="dst", by.y="id")[, c("src", "new_id", "time", 
                                              "type", "color", "weight")]
 colnames(full_edge_list) <- c("src", "dst", "time", "type", "color", "weight")
+# Make safeloops default color
+full_edge_list$color[full_edge_list$src==full_edge_list$dst] <- 1
 
 # Sort the kills (edges) by time.
 full_edge_list = full_edge_list[order(full_edge_list$time), ]
@@ -50,46 +52,34 @@ V(td_net)$flag <- node_list$flag
 V(td_net)$tid <- node_list$tid
 E(td_net)$weight <- full_edge_list$weight
 
-frame_col <- c("black", "red")
-edge_col <- c("black", "red", "blue")
+frame_col <- c("black", "deeppink2")
+edge_col <- c("black", "deeppink2", "turquoise3")
+vertex_frame <- c(NA, "deeppink2")
 
 # frlay <- layout.fruchterman.reingold(td_net)
 
 # Create two plots and save them as an image file.
 png("figs/net_viz/obs_net.png", 
-     width=20, height=10, 
-     units='in', res=300)
+    width=8.9, height=9, 
+    units='cm', res=400)
 
-par(mfrow = c(1, 2), mar = c(0, 1, 2, 1))
+par(mfrow = c(1, 1), mar = c(0, 0.2, 0.7, 0.2))
 
 plot(td_net,
      loops = TRUE,
-     vertex.size = 7,
+     vertex.shape = vertex_shape[node_list$flag + 1],
+     vertex.size = 9,
+     vertex.frame.color = vertex_frame[node_list$flag + 1],
      vertex.color = "lightgray",
-     vertex.frame.color = frame_col[node_list$flag + 1],
-     edge.width = (E(td_net)$weight/100) * 5, 
-     edge.arrow.size = 0.4 + (E(td_net)$weight/5),
+     edge.width = 0.05 + (E(td_net)$weight/100) * 1.6,  
+     edge.arrow.size = 0.18,
      edge.color = adjustcolor(edge_col[full_edge_list$color], 
                               alpha.f = 0.8), 
      vertex.label = V(td_net)$name,
      vertex.label.color = "black",
      layout = frlay, 
-     vertex.label.cex = 1)
-title("Original", cex.main = 2)
+     vertex.label.cex = 0.5)
+title("A) Killing network", cex.main = 0.75, font.main = 1)
 
-plot(td_net,
-     loops = TRUE,
-     vertex.size = 7,
-     vertex.color = "lightgray",
-     vertex.frame.color = frame_col[node_list$flag + 1],
-     edge.width = (E(td_net)$weight/100) * 5, 
-     edge.arrow.size = 0.4 + (E(td_net)$weight/5),
-     edge.color = adjustcolor(edge_col[full_edge_list$color], 
-                              alpha.f = 0.8), 
-     vertex.label = V(td_net)$rand_name,
-     vertex.label.color = "black",
-     layout = frlay, 
-     vertex.label.cex = 1)
-title("Permutation", cex.main = 2)
 
 dev.off()

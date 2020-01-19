@@ -48,7 +48,8 @@ V(td_net)$tid <- node_list$tid
 E(td_net)$weight <- 1:nrow(edge_list)
 
 colors <- inlmisc::GetColors(max(node_list$tid), scheme = "smooth rainbow")
-frame_col <- c("black", "red")
+frame_col <- c("black", "deeppink2")
+vertex_frame <- c(NA, "deeppink2")
 
 num_of_edges <- nrow(edge_list)
 edge_colors <- GetColors(num_of_edges, scheme = "smooth rainbow", 
@@ -58,35 +59,37 @@ edge_colors <- GetColors(num_of_edges, scheme = "smooth rainbow",
 
 # Create two plots and save them as an image file.
 png("figs/net_viz/vic_net.png", 
-     width=20, height=10, 
-     units='in', res=300)
+     width=17.8, height=9, 
+     units='cm', res=400)
 
-par(mfrow = c(1, 2), mar = c(0, 1, 2, 1))
+par(mfrow = c(1, 2), mar = c(0, 0.2, 0.7, 0.2))
 
 plot(td_net,
      loops = TRUE,
-     vertex.size = 7,
+     vertex.size = 9,
+     vertex.frame.color = vertex_frame[node_list$flag + 1],
      vertex.color = adjustcolor(colors[node_list$tid], alpha.f = 0.7), 
-     edge.width = (E(td_net)$weight/100) * 5, 
-     edge.arrow.size = 0.4 + (E(td_net)$weight/5),
+     edge.width = 0.05 + (E(td_net)$weight/100) * 1.6, 
+     edge.arrow.size = 0.18,
      edge.color = adjustcolor(frame_col[edge_list$color], alpha.f = 0.8), 
      vertex.label = V(td_net)$name,
      vertex.label.color = ifelse(V(td_net)$name >= 78, "white", "black"),
      layout = frlay, 
-     vertex.label.cex = 1)
-title("Original", cex.main = 2)
+     vertex.label.cex = 0.5)
+title("A) Original network", cex.main = 0.75, font.main = 1)
 
 plot(td_net,
      loops = TRUE,
-     vertex.size = 7,
+     vertex.size = 9,
      vertex.color = adjustcolor(colors[node_list$tid], alpha.f = 0.7), 
-     edge.width = (E(td_net)$weight/100) * 5, 
-     edge.arrow.size = 0.4 + (E(td_net)$weight/5),
+     vertex.frame.color = vertex_frame[node_list$flag + 1],
+     edge.width = 0.05 + (E(td_net)$weight/100) * 1.6, 
+     edge.arrow.size = 0.18,
      edge.color = adjustcolor(frame_col[edge_list$color], alpha.f = 0.8), 
      vertex.label = V(td_net)$rand_name,
      vertex.label.color = ifelse(V(td_net)$rand_name >= 78, "white", "black"),
      layout = frlay, 
-     vertex.label.cex = 1)
-title("Permutation", cex.main = 2)
+     vertex.label.cex = 0.5)
+title("B) Randomized network", cex.main = 0.75, font.main = 1)
 
 dev.off()
