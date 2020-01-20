@@ -33,6 +33,9 @@ edge_list = merge(edge_list, node_list,
                   by.x="dst", by.y="id")[, c("src", "new_id", "time", "color")]
 colnames(edge_list) <- c("src", "dst", "time", "color")
 
+# Make safeloops default color
+edge_list$color[edge_list$src==edge_list$dst] <- 1
+
 # Sort the kills (edges) by time.
 edge_list = edge_list[order(edge_list$time), ]
 
