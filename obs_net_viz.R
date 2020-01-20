@@ -55,6 +55,8 @@ E(td_net)$weight <- full_edge_list$weight
 frame_col <- c("black", "deeppink2")
 edge_col <- c("black", "deeppink2", "turquoise3")
 vertex_frame <- c(NA, "deeppink2")
+vertex_shape <- c("circle", "square")
+node_size <- c(9, 8)
 
 # frlay <- layout.fruchterman.reingold(td_net)
 
@@ -65,10 +67,10 @@ png("figs/net_viz/obs_net.png",
 
 par(mfrow = c(1, 1), mar = c(0, 0.2, 0.7, 0.2))
 
-plot(td_net,
+plot.igraph(td_net,
      loops = TRUE,
      vertex.shape = vertex_shape[node_list$flag + 1],
-     vertex.size = 9,
+     vertex.size = node_size[node_list$flag + 1],
      vertex.frame.color = vertex_frame[node_list$flag + 1],
      vertex.color = "lightgray",
      edge.width = 0.05 + (E(td_net)$weight/100) * 1.6,  

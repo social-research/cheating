@@ -53,6 +53,8 @@ E(td_net)$weight <- 1:nrow(edge_list)
 colors <- inlmisc::GetColors(max(node_list$tid), scheme = "smooth rainbow")
 frame_col <- c("black", "deeppink2")
 vertex_frame <- c(NA, "deeppink2")
+node_shape <- c("circle", "square")
+node_size <- c(9, 8)
 
 num_of_edges <- nrow(edge_list)
 edge_colors <- GetColors(num_of_edges, scheme = "smooth rainbow", 
@@ -60,16 +62,21 @@ edge_colors <- GetColors(num_of_edges, scheme = "smooth rainbow",
 
 # frlay <- layout.fruchterman.reingold(td_net)
 
+# Reduce the size of self-loops.
+# trace("plot.igraph", edit=TRUE)
+# Add cp <- matrix(c(x0, y0, x0 + 0.18, y0 + 0.07, x0 + 0.18, y0 - 0.07, x0, y0), ncol = 2, byrow = TRUE)
+
 # Create two plots and save them as an image file.
-png("figs/net_viz/vic_net.png", 
+png("figs/net_viz/vic_net_rev.png", 
      width=17.8, height=9, 
      units='cm', res=400)
 
 par(mfrow = c(1, 2), mar = c(0, 0.2, 0.7, 0.2))
 
-plot(td_net,
+plot.igraph(td_net,
      loops = TRUE,
-     vertex.size = 9,
+     vertex.shape = node_shape[node_list$flag + 1],
+     vertex.size = node_size[node_list$flag + 1],
      vertex.frame.color = vertex_frame[node_list$flag + 1],
      vertex.color = adjustcolor(colors[node_list$tid], alpha.f = 0.7), 
      edge.width = 0.05 + (E(td_net)$weight/100) * 1.6, 
@@ -81,9 +88,10 @@ plot(td_net,
      vertex.label.cex = 0.5)
 title("A) Original network", cex.main = 0.75, font.main = 1)
 
-plot(td_net,
+plot.igraph(td_net,
      loops = TRUE,
-     vertex.size = 9,
+     vertex.shape = node_shape[node_list$flag + 1],
+     vertex.size = node_size[node_list$flag + 1],
      vertex.color = adjustcolor(colors[node_list$tid], alpha.f = 0.7), 
      vertex.frame.color = vertex_frame[node_list$flag + 1],
      edge.width = 0.05 + (E(td_net)$weight/100) * 1.6, 
