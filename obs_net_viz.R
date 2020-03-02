@@ -55,18 +55,20 @@ E(td_net)$weight <- full_edge_list$weight
 frame_col <- c("black", "deeppink2")
 edge_col <- c("black", "deeppink2", "turquoise3")
 vertex_frame <- c(NA, "deeppink2")
-vertex_shape <- c("circle", "square")
+vertex_shape <- c("circle", "circle")
 node_size <- c(9, 8)
 
 # frlay <- layout.fruchterman.reingold(td_net)
 
 # Create two plots and save them as an image file.
-png("figs/net_viz/obs_net.png", 
-    width=8.9, height=9, 
-    units='cm', res=400)
+pdf("figs/net_viz/obs_net.pdf", 
+    width=3.42, height=3.4)
 
-par(mfrow = c(1, 1), mar = c(0, 0.2, 0.7, 0.2))
-
+par(mfrow = c(1, 1), mar = c(0, 0.1, 0.1, 0.1))
+#trace("plot.igraph",edit=TRUE) # manually reduce loop size
+# find in loop <- function
+# cp <- matrix(c(x0, y0, x0 + 0.1, y0 + 0.05, x0 + 0.1, 
+#                 y0 - 0.05, x0, y0), ncol = 2, byrow = TRUE)
 plot.igraph(td_net,
      loops = TRUE,
      vertex.shape = vertex_shape[node_list$flag + 1],
@@ -81,7 +83,7 @@ plot.igraph(td_net,
      vertex.label.color = "black",
      layout = frlay, 
      vertex.label.cex = 0.5)
-title("A) Killing network", cex.main = 0.75, font.main = 1)
+#title("A) Killing network", cex.main = 0.75, font.main = 1)
 
 
 dev.off()

@@ -51,14 +51,13 @@ V(td_net)$tid <- node_list$tid
 E(td_net)$weight <- 1:nrow(edge_list)
 
 colors <- inlmisc::GetColors(max(node_list$tid), scheme = "smooth rainbow")
+print(colors)
 frame_col <- c("black", "deeppink2")
 vertex_frame <- c(NA, "deeppink2")
-node_shape <- c("circle", "square")
+node_shape <- c("circle", "circle")
 node_size <- c(9, 8)
 
 num_of_edges <- nrow(edge_list)
-edge_colors <- GetColors(num_of_edges, scheme = "smooth rainbow", 
-                         stops = c(0.7, 0.9))
 
 # frlay <- layout.fruchterman.reingold(td_net)
 
@@ -67,12 +66,14 @@ edge_colors <- GetColors(num_of_edges, scheme = "smooth rainbow",
 # Add cp <- matrix(c(x0, y0, x0 + 0.18, y0 + 0.07, x0 + 0.18, y0 - 0.07, x0, y0), ncol = 2, byrow = TRUE)
 
 # Create two plots and save them as an image file.
-png("figs/net_viz/vic_net_rev.png", 
-     width=17.8, height=9, 
-     units='cm', res=400)
+pdf("figs/net_viz/rand_net.pdf", 
+     width=7, height=3.4)
 
 par(mfrow = c(1, 2), mar = c(0, 0.2, 0.7, 0.2))
-
+#trace("plot.igraph",edit=TRUE) # manually reduce loop size
+# find in loop <- function
+# cp <- matrix(c(x0, y0, x0 + 0.1, y0 + 0.05, x0 + 0.1, 
+#                 y0 - 0.05, x0, y0), ncol = 2, byrow = TRUE)
 plot.igraph(td_net,
      loops = TRUE,
      vertex.shape = node_shape[node_list$flag + 1],
@@ -86,7 +87,7 @@ plot.igraph(td_net,
      vertex.label.color = ifelse(V(td_net)$name >= 78, "white", "black"),
      layout = frlay, 
      vertex.label.cex = 0.5)
-title("A) Original network", cex.main = 0.75, font.main = 1)
+title("Original", cex.main = 0.6, font.main = 1)
 
 plot.igraph(td_net,
      loops = TRUE,
@@ -101,6 +102,6 @@ plot.igraph(td_net,
      vertex.label.color = ifelse(V(td_net)$rand_name >= 78, "white", "black"),
      layout = frlay, 
      vertex.label.cex = 0.5)
-title("B) Randomized network", cex.main = 0.75, font.main = 1)
+title("Randomized", cex.main = 0.6, font.main = 1)
 
 dev.off()
