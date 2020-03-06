@@ -118,7 +118,7 @@ def get_observers(obs_data):
 
 def get_obs_summary_tab(observers, num_of_obs):
     summary_table = spark.sql("SELECT id, start_date, SUM(CASE WHEN num_of_obs >= " + str(num_of_obs) +
-                              " THEN 1 ELSE 0 END) AS total_obs, FROM observers GROUP BY id, start_date")
+                              " THEN 1 ELSE 0 END) AS total_obs FROM observers GROUP BY id, start_date")
     summary_table.registerTempTable("summary_table")
 
     first_m_dates = spark.sql("""SELECT * 
