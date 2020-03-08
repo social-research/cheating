@@ -6,14 +6,18 @@ spark = SparkSession(sc)
 
 
 def add_damage(td, percent):
-    """This function checks whether a killing is critical or not 
-       in accordance with the given level of harm. The value of damage is one
-       if the victim got killed after getting into the top 30 percent, and otherwise zero.
-       Args:
-           td: DataFrame that contains killings
-           percent: Number between 0 and 100 which represents the percentage
-       Returns:
-           damage: DataFrame that contains the cases in accordance with the motif
+    """Adds the amount of potential damage caused by cheating to the victim for each killing.
+    
+    Args:
+        td: A Spark DataFrame of killings.  
+        percent: A number between 0 and 100 representing the degree of harm. For example,
+            we assume that players are severely harmed if they were killed by cheating 
+            after getting into the top 30% if the value of 'percent' is 30. 
+
+    Returns:
+        damage: A Spark DataFrame with an additional column in which 
+            each row (victim) takes on the value of 1 if the player got into the top 
+            and the value 0 otherwise.  
     """
     # Count the number of rows (unique victims) for each match.
     num_of_rows = spark.sql("""SELECT mid, COUNT(*) AS num_of_rows FROM td 
@@ -35,11 +39,14 @@ def add_damage(td, percent):
 
 
 def get_vic_summary_tab(transitions):
-    """This function returns a summary table for the victimisation-based mechanism.
-       Args:
-           transitions: DataFrame that contains the cases in accordance with the motif
-       Returns:
-           add_dates: DataFrame that contains the total number of victimisation experiences
+    """Counts the number of experiences that occurred before adopting cheating for each cheater. 
+
+    Args:
+        transitions: A Spark DataFrame of transitions from non-cheater to cheater.
+
+    Returns:
+        add_dates: A Spark DataFrame that shows the total number of experiences and 
+            the number of experiences with severe harm before adopting cheating for each cheater.
     """
     stats_of_victims = spark.sql("""SELECT dst AS id, 
                                     TO_DATE(CAST(UNIX_TIMESTAMP(dst_sd, 'yyyy-MM-dd') AS TIMESTAMP)) AS start_date, 
@@ -71,11 +78,16 @@ def get_vic_summary_tab(transitions):
 
 
 def get_observers(obs_data):
-    """This function returns a summary table for the observation-based mechanism.
-       Args:
-           obs_data: DataFrame that contains killings
-       Returns:
-           add_dates: DataFrame that contains the total number of observations
+    """Gets a list of observers who observed cheating and the number of observations 
+       for each killer within each match.
+
+    Args:
+        obs_data: A Spark DataFrame of killings.
+
+    Returns:
+        summary_table: A Spark DataFrame that lists the players who observed cheating, 
+            killers whom they observed, and the number of killings done by each cheater 
+            they observed for each match. 
     """
     kills_done_by_cheaters = spark.sql("""SELECT mid, src AS killer, time, aid FROM obs_data 
                                           WHERE src_curr_flag = 1""")
@@ -117,6 +129,19 @@ def get_observers(obs_data):
 
 
 def get_obs_summary_tab(observers, num_of_obs):
+    """Counts the number of observations that occurred before adopting cheating for each cheater.
+
+    Args:
+        observers: A Spark DataFrame that lists the pairs of cheating killer and observer and 
+            shows the number of observations for each pair.  
+        num_of_obs: A number representing the definition of observation. For example, 
+            we assume two killings done by the same cheater as one observation 
+            if the value of 'num_of_obs' is 2.
+
+    Returns:
+        add_dates: A Spark DataFrame that shows the total number of observations and 
+            before adopting cheating for each cheater.
+    """
     summary_table = spark.sql("SELECT id, start_date, SUM(CASE WHEN num_of_obs >= " + str(num_of_obs) +
                               " THEN 1 ELSE 0 END) AS total_obs FROM observers GROUP BY id, start_date")
     summary_table.registerTempTable("summary_table")

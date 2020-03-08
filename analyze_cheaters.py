@@ -7,12 +7,20 @@ spark = SparkSession(sc)
 
 
 def get_avg_kill_ratio(kills, deaths):
-    """This function calculates the average kill ratio for each player.
-       Args:
-           kills: Dataframe that contains kill records of players
-           deaths: Dataframe that contains death records of players
-       Returns:
-           avg_kill_ratio: Dataframe that contains the values of overall average kill ratio for each player
+    """Calculates the average kill ratio of each player.
+
+    Calculates the kill ratio of each player on a daily basis and get the average.
+    The daily kill ratio is the number of kills divided by the sum of kills and deaths.
+
+    Args:
+        kills: A Spark DataFrame that has killings done by players.
+        deaths: A Spark DataFrame that has deaths of players.
+
+    Returns:
+        avg_kill_ratio: A Pandas DataFrame with the values of average kill ratio.
+
+        If a player from the 'kills' argument did not kill anyone,
+        then the value of average kill ratio of that player is zero.
     """
     kills_by_date = spark.sql("""SELECT src AS id, m_date, COUNT(*) AS num_of_kills 
                                  FROM kills GROUP BY src, m_date""")
@@ -40,12 +48,17 @@ def get_avg_kill_ratio(kills, deaths):
 
 
 def get_avg_time_diff_between_kills(kills):
-    """This function calculates the average time difference between consecutive kills for each player.
-       Args:
-           kills: Dataframe that contains kill records of players
-       Returns:
-           avg_kill_intervals_df: Dataframe that contains values of overall average time difference 
-                                  between kills for each player
+    """Gets time differences between two consecutive killings and the average value for each player.
+
+    Args:
+        kills: A Spark DataFrame that has killings done by players.
+
+    Returns:
+        avg_kill_intervals_df: A Pandas DataFrame with the values of 
+            average time difference between kills.
+
+        If a player from the 'kills' argument killed less than two players,
+        then that row will not be found in the returned table.
     """
     add_prev_kill_times = spark.sql("""SELECT mid, src, UNIX_TIMESTAMP(time) AS time, 
                                        UNIX_TIMESTAMP(LAG(time, 1) OVER (PARTITION BY mid, src ORDER BY time)) 

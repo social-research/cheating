@@ -7,12 +7,15 @@ spark = SparkSession(sc)
 
 
 def get_transitions(file_path, num_of_days):
-    """Select the transitions that happened within the given period.
-       Args:
-           file_path:
-           num_of_days:
-       Returns:
-           transitons:
+    """Selects the transitions that occurred within the given period of time.
+
+    Args:
+        file_path: A string specifying the path to a file in Amazon S3. 
+        num_of_days: A number representing a time window for influence.
+
+    Returns:
+        transitions: A Spark DataFrame that has the transitions 
+            from non-cheater to cheater that occurred within the given period.
     """
     data = spark.read.parquet(file_path)
     data.registerTempTable("data")
@@ -22,14 +25,18 @@ def get_transitions(file_path, num_of_days):
 
 
 def merge_tables(vic_df, obs_df, def_type):
-    """Create a table that contains player (cheater) IDs and the start dates of 
-       cheating adoption for each cheater and add vic data and obs data
-       Args:
-           vic_df:
-           obs_df:
-           def_type: simple - 0, strict - 1
-       Returns:
-           merged_df:
+    """Combines the number of experiences and the number of observations for each player 
+       to get the number of players for each pair (of victimization and observation = motif).  
+
+    Args:
+        vic_df: A Pandas DataFrame that shows the daily number of experiences for each player. 
+        obs_df: A Pandas DataFrame that shows the daily number of observations for each player.  
+        def_type: A binary-valued number that takes on the value of 0 for 
+            simple definition of experience and observation and the value 1 otherwise.
+
+    Returns:
+        frequency_table: A Pandas DataFrame that lists the pairs of victimization and observation
+            and shows the number of times the pairs occur.
     """
     dates_from_obs = obs_df[['id', 'start_date']]
     dates_from_vic = vic_df[['id', 'start_date']]
@@ -60,10 +67,13 @@ def merge_tables(vic_df, obs_df, def_type):
 
 
 def put_summary_table_in_csv_file(file_number, def_type):
-    """docstrings
-       Args:
-           file_number:
-           def_type: simple - 0, strict - 1
+    """Puts a frequency table that lists the pairs of victimization and observation
+       and shows the number of times the pairs occur in a single network into a CSV file. 
+
+    Args:
+        file_number: A number representing a unique number for each output file.
+        def_type: A binary-valued number that takes on the value of 0 for 
+            simple definition of experience and observation and the value 1 otherwise.
     """
     vic_data_path = "s3://social-research-cheating/summary-tables/rand-net/vic/vic_" + str(file_number) + ".parquet"
     vic_data = get_transitions(vic_data_path, 7)
@@ -89,13 +99,17 @@ def put_summary_table_in_csv_file(file_number, def_type):
     
 
 def create_merged_csv_file(emp_file, first_rand_file, num_of_files):
-    """Merge multiple csv files into one file.
-       Args:
-           emp_file:
-           first_rand_file:
-           num_of_files:
-       Returns:
-           merged_data:
+    """Combines multiple tables in CSV files into a single Pandas DataFrame.
+
+    Args:
+        emp_file: A string specifying the path to the results from the empirical network.
+        first_rand_file: A string specifying the path to the results 
+            from the first randomized network.
+        num_of_files: A number representing the total number of CSV files to combine.
+
+    Returns:
+        merged_data: A Pandas DataFrame that lists the pairs of victimization and observation
+            and shows the number of times the pairs occur for each network.
     """
     emp_data = pd.read_csv(emp_file)
     emp_data = emp_data.rename(columns={'freq': 'E'})
