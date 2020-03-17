@@ -38,11 +38,12 @@ def add_damage(td, percent):
     return damage
 
 
-def get_vic_summary_tab(transitions):
+def get_vic_summary_tab(experiences):
     """Counts the number of experiences that occurred before adopting cheating for each cheater. 
 
     Args:
-        transitions: A Spark DataFrame of transitions from non-cheater to cheater.
+        experiences: A Spark DataFrame of experiences (= being killed by cheating) 
+            that players (victims) had before cheating adoption.
 
     Returns:
         add_dates: A Spark DataFrame that shows the total number of experiences and 
@@ -54,7 +55,7 @@ def get_vic_summary_tab(transitions):
                                     CAST(DATEDIFF(dst_sd, m_date) AS INT) AS period, src AS killer, 
                                     COUNT(*) AS num_of_exp, 
                                     SUM(damage) AS num_of_severe_damage 
-                                    FROM transitions
+                                    FROM experiences
                                     GROUP BY dst, dst_sd, m_date, src""")
     stats_of_victims.registerTempTable("stats_of_victims")
 
