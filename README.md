@@ -3,7 +3,7 @@ The Contagion of Cheating
 
 This repository contains replication materials for the paper "Large-scale network analysis reveals cheating spreads through victimization and observation".
 
-The `data` folder contains the data files required to reproduce the figures in the paper (See the `figs` folder) by using paper-descriptive-stats-visualization.ipynb and paper-heatmap-visualization.ipynb.
+The `data` folder contains the data files required to reproduce the figures in the paper (See the `figs` folder) by using `paper-descriptive-stats-visualization.ipynb` and `paper-heatmap-visualization.ipynb`.
 
 - `01-storing-data.ipynb` reads the raw data from text files and stores them as Spark DataFrames in Amazon S3.
 
