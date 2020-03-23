@@ -7,17 +7,18 @@ spark = SparkSession(sc)
 
 def add_damage(td, percent):
     """Adds the amount of potential damage caused by cheating to the victim for each killing.
+       Exploits the fact that players who survive longer are ranked higher.
     
     Args:
         td: A Spark DataFrame of killings.  
-        percent: A number between 0 and 100 representing the degree of harm. For example,
+        percent: An integer between 0 and 100 representing the degree of harm. For example,
             we assume that players are severely harmed if they were killed by cheating 
             after getting into the top 30% if the value of 'percent' is 30. 
 
     Returns:
         damage: A Spark DataFrame with an additional column in which 
             each row (victim) takes on the value of 1 if the player got into the top 
-            and the value 0 otherwise.  
+            and the value 0 otherwise.
     """
     # Count the number of rows (unique victims) for each match.
     num_of_rows = spark.sql("""SELECT mid, COUNT(*) AS num_of_rows FROM td 
@@ -27,7 +28,7 @@ def add_damage(td, percent):
     add_num_of_rows = spark.sql("""SELECT t.*, num_of_rows 
                                    FROM td t JOIN num_of_rows n ON t.mid = n.mid""")
     add_num_of_rows.registerTempTable("add_num_of_rows")
-
+    
     ranks = spark.sql("""SELECT *, RANK(dst) OVER (PARTITION BY mid ORDER BY time DESC) AS rank 
                          FROM add_num_of_rows ORDER BY mid, time DESC""")
     ranks.registerTempTable("ranks")
@@ -39,7 +40,7 @@ def add_damage(td, percent):
 
 
 def get_vic_summary_tab(experiences):
-    """Counts the number of experiences that occurred before adopting cheating for each cheater. 
+    """Gets the number of experiences that occurred before cheating adoption for each cheater. 
 
     Args:
         experiences: A Spark DataFrame of experiences (= being killed by cheating) 
@@ -47,33 +48,31 @@ def get_vic_summary_tab(experiences):
 
     Returns:
         add_dates: A Spark DataFrame that shows the total number of experiences and 
-            the number of experiences with severe harm before adopting cheating for each cheater.
+            the number of experiences with severe harm before cheating adoption for each cheater.
     """
-    stats_of_victims = spark.sql("""SELECT dst AS id, 
-                                    TO_DATE(CAST(UNIX_TIMESTAMP(dst_sd, 'yyyy-MM-dd') AS TIMESTAMP)) AS start_date, 
-                                    TO_DATE(CAST(UNIX_TIMESTAMP(m_date, 'yyyy-MM-dd') AS TIMESTAMP)) AS m_date, 
-                                    CAST(DATEDIFF(dst_sd, m_date) AS INT) AS period, src AS killer, 
-                                    COUNT(*) AS num_of_exp, 
-                                    SUM(damage) AS num_of_severe_damage 
-                                    FROM experiences
-                                    GROUP BY dst, dst_sd, m_date, src""")
-    stats_of_victims.registerTempTable("stats_of_victims")
+    victim_stats = spark.sql("""SELECT dst AS id, src AS killer,
+                                TO_DATE(CAST(UNIX_TIMESTAMP(dst_sd, 'yyyy-MM-dd') AS TIMESTAMP)) AS start_date, 
+                                TO_DATE(CAST(UNIX_TIMESTAMP(m_date, 'yyyy-MM-dd') AS TIMESTAMP)) AS m_date, 
+                                CAST(DATEDIFF(dst_sd, m_date) AS INT) AS period,  
+                                COUNT(*) AS num_of_exp, 
+                                SUM(damage) AS num_of_severe_damage 
+                                FROM experiences GROUP BY dst, dst_sd, m_date, src""")
+    victim_stats.registerTempTable("victim_stats")
 
-    # Get the date when the player was first killed by cheating.
-    first_m_dates = spark.sql("""SELECT * 
-                                 FROM (SELECT id, m_date, period, ROW_NUMBER() OVER (PARTITION BY id ORDER BY m_date) 
-                                 AS row_number FROM stats_of_victims) WHERE row_number IN (1)""")
-    first_m_dates.registerTempTable("first_m_dates")
+    # Get the date when the player was first killed by cheating (= the first contact with cheating).
+    first_contacts = spark.sql("""SELECT * 
+                                  FROM (SELECT id, m_date, period, ROW_NUMBER() OVER (PARTITION BY id ORDER BY m_date) 
+                                  AS row_number FROM victim_stats) WHERE row_number IN (1)""")
+    first_contacts.registerTempTable("first_contacts")
 
     summary_table = spark.sql("""SELECT id, start_date, SUM(num_of_exp) AS total_exp, 
                                  SUM(num_of_severe_damage) AS total_severe_damage
-                                 FROM stats_of_victims 
-                                 GROUP BY id, start_date""")
+                                 FROM victim_stats GROUP BY id, start_date""")
     summary_table.registerTempTable("summary_table")
 
     add_dates = spark.sql("""SELECT s.id, s.start_date, f.m_date, f.period, 
                              s.total_exp, s.total_severe_damage
-                             FROM summary_table s LEFT JOIN first_m_dates f ON s.id = f.id""")
+                             FROM summary_table s LEFT JOIN first_contacts f ON s.id = f.id""")
     
     return add_dates 
 
@@ -147,13 +146,13 @@ def get_obs_summary_tab(observers, num_of_obs):
                               " THEN 1 ELSE 0 END) AS total_obs FROM observers GROUP BY id, start_date")
     summary_table.registerTempTable("summary_table")
 
-    first_m_dates = spark.sql("""SELECT * 
-                                 FROM (SELECT id, m_date, period, ROW_NUMBER() OVER (PARTITION BY id ORDER BY m_date) 
-                                 AS row_number FROM observers) WHERE row_number IN (1)""")
-    first_m_dates.registerTempTable("first_m_dates")
+    first_contacts = spark.sql("""SELECT * 
+                                  FROM (SELECT id, m_date, period, ROW_NUMBER() OVER (PARTITION BY id ORDER BY m_date) 
+                                  AS row_number FROM observers) WHERE row_number IN (1)""")
+    first_contacts.registerTempTable("first_contacts")
 
     add_dates = spark.sql("""SELECT s.id, s.start_date, f.m_date, f.period, s.total_obs
-                             FROM summary_table s LEFT JOIN first_m_dates f ON s.id = f.id""")
+                             FROM summary_table s LEFT JOIN first_contacts f ON s.id = f.id""")
 
     return add_dates
 

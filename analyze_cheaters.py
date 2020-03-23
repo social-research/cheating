@@ -10,11 +10,12 @@ def get_avg_kill_ratio(kills, deaths):
     """Calculates the average kill ratio of each player.
 
     Calculates the kill ratio of each player on a daily basis and get the average of the measurements. 
-    The average kill ratio per day is the number of kills divided by the sum of kills and deaths.
+    The average kill ratio per day is the number of kills divided by the sum of kills and deaths
+    in that particular day.
 
     Args:
-        kills: A Spark DataFrame that has killings done by players.
-        deaths: A Spark DataFrame that has deaths of players.
+        kills: A Spark DataFrame with killings done by players.
+        deaths: A Spark DataFrame that contains deaths of players.
 
     Returns:
         avg_kill_ratio: A Pandas DataFrame with the values of average kill ratio.
@@ -53,7 +54,7 @@ def get_avg_time_diff_between_kills(kills):
     """Gets time differences between two consecutive killings and the average value for each player.
 
     Args:
-        kills: A Spark DataFrame that has killings done by players.
+        kills: A Spark DataFrame with killings done by players.
 
     Returns:
         avg_kill_interval: A Pandas DataFrame with the values of average time difference 
@@ -72,8 +73,7 @@ def get_avg_time_diff_between_kills(kills):
     add_time_diffs.registerTempTable("add_time_diffs")
 
     avg_time_diffs = spark.sql("""SELECT src AS id, AVG(time_diff) AS delta  
-                                  FROM add_time_diffs WHERE time_diff IS NOT NULL 
-                                  GROUP BY src""")
+                                  FROM add_time_diffs WHERE time_diff IS NOT NULL GROUP BY src""")
     avg_kill_interval = avg_time_diffs.toPandas()
     avg_kill_interval['delta'] = avg_kill_interval['delta'].round(4)
 
