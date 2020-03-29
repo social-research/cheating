@@ -26,14 +26,14 @@ def permute_node_labels(raw_td, nodes, team_ids):
     Performs randomization within teams and cheater-type for each match. 
 
     Args:
-        raw_td: A Spark DataFrame that has killings.
+        raw_td: A Spark DataFrame with killings.
         nodes: A Spark DataFrame with player data.
-        team_ids: A Spark DataFrame that has player IDs and the corresponding 
+        team_ids: A Spark DataFrame with player IDs and the corresponding 
             team IDs for each match.
 
     Returns:
         mapping: A Spark DataFrame mapping player IDs in the input table to 
-            the corresponding (randomly selected) new player IDs.
+            the corresponding (randomly selected) new player IDs for each match.
     """
     spark.sql("""SELECT mid, m_date, dst AS id, dst_curr_flag AS flag FROM td 
                  UNION SELECT mid, m_date, src, src_curr_flag FROM td 

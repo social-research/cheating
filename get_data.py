@@ -1,4 +1,4 @@
-from pyspark.sql.types import StructField, StructType, StringType, IntegerType, TimestampType, LongType
+from pyspark.sql.types import StructField, StructType, StringType, IntegerType, TimestampType
 from pyspark.context import SparkContext
 from pyspark.sql.session import SparkSession
 
@@ -7,7 +7,7 @@ spark = SparkSession(sc)
 
 
 def clean_edges(table_name):
-    """Removes matches in special mode where players can revive multiple times 
+    """Removes special matches where players can revive multiple times 
        from raw data in the given table.
     
     Uses the fact that players should be killed only once as they are given only one life per match.
@@ -18,7 +18,7 @@ def clean_edges(table_name):
         table_name: A string representing a unique text file that contains raw data.
     
     Returns:
-        cleaned_logs: A Spark DataFrame without matches in special mode.
+        cleaned_log: A Spark DataFrame without special matches.
     """
     path_to_file = "s3://social-research-cheating/raw_text_files/" + table_name + "_edges.txt"
     
@@ -32,17 +32,19 @@ def clean_edges(table_name):
     edges = spark.read.options(header='false', delimiter='\t').schema(edge_schema).csv(path_to_file)
     edges.registerTempTable("edges")
     
-    spark.sql("""SELECT mid, COUNT(*) AS num_row, COUNT(DISTINCT dst) AS uniq_dst FROM edges 
-                 GROUP BY mid""").createOrReplaceTempView("num_dst")
+    spark.sql("""SELECT mid, COUNT(*) AS num_of_rows, COUNT(DISTINCT dst) AS num_of_dst 
+                 FROM edges GROUP BY mid""").createOrReplaceTempView("temp")
 
-    spark.sql("""SELECT mid, num_row, uniq_dst, CASE WHEN num_row == uniq_dst THEN 0 ELSE 1 END AS spec_mod 
-                 FROM num_dst""").createOrReplaceTempView("mod_tab")
+    spark.sql("""SELECT mid, num_of_rows, num_of_dst, 
+                 CASE WHEN num_of_rows == num_of_dst THEN 0 ELSE 1 END AS spec_mode 
+                 FROM temp""").createOrReplaceTempView("mode_table")
     
-    spark.sql("SELECT mid, num_row FROM mod_tab WHERE spec_mod = 0").createOrReplaceTempView("default_modes")
+    spark.sql("""SELECT mid, num_of_rows FROM mode_table 
+                 WHERE spec_mode = 0""").createOrReplaceTempView("default_matches")
     
-    cleaned_logs = spark.sql("SELECT e.mid, src, dst, time, m_date FROM edges e JOIN default_modes d ON e.mid = d.mid")
+    cleaned_log = spark.sql("SELECT e.mid, src, dst, time, m_date FROM edges e JOIN default_matches d ON e.mid = d.mid")
     
-    return cleaned_logs
+    return cleaned_log
 
 
 def combine_telemetry_data(day, num_of_files, path_to_data):
@@ -55,20 +57,21 @@ def combine_telemetry_data(day, num_of_files, path_to_data):
         path_to_data: A string specifying the path to a file in Amazon S3.
     """
     if day == 1:
-        cleaned_tab = clean_edges("td_day_1_1")
-        cleaned_tab.write.parquet(path_to_data)
+        cleaned_data = clean_edges("td_day_1_1")
+        cleaned_data.write.parquet(path_to_data)
         
         for i in range(2, num_of_files + 1):
-            new_edges = clean_edges("td_day_" + str(day) + "_" + str(i))
-            new_edges.write.mode("append").parquet(path_to_data)
+            cleaned_data = clean_edges("td_day_" + str(day) + "_" + str(i))
+            cleaned_data.write.mode("append").parquet(path_to_data)
     else:
         for i in range(1, num_of_files + 1):
-            new_edges = clean_edges("td_day_" + str(day) + "_" + str(i))
-            new_edges.write.mode("append").parquet(path_to_data)
+            cleaned_data = clean_edges("td_day_" + str(day) + "_" + str(i))
+            cleaned_data.write.mode("append").parquet(path_to_data)
 
 
 def read_team_data(table_name):
-    """Creates a table with team IDs of players and the other one with ranks of teams in team matches.
+    """Creates a table with team IDs of players and the other one with ranks of teams 
+       in team matches.
     
     Args:
         table_name: A string representing a unique text file that stores raw team membership data.
@@ -106,7 +109,7 @@ def combine_team_data(day, num_of_files, path_to_team_data, path_to_rank_data):
                created on the given date.
            path_to_team_data: A string specifying the path to a file that stores team IDs of players 
                in Amazon S3.
-           path_to_rank_data: A string specifying the path to a file that stores rankds of teams 
+           path_to_rank_data: A string specifying the path to a file that stores ranks of teams 
                in Amazon S3.
     """
     if day == 1:
@@ -127,7 +130,8 @@ def combine_team_data(day, num_of_files, path_to_team_data, path_to_rank_data):
     
 def get_obs_data(file_path, nodes):
     """Collects killings (including self-loops) of the matches where at least one player was killed by cheating 
-       and at least one potential cheater exists.
+       and at least one potential cheater (the player who was a non-cheater at the time of the match 
+       but later adopted cheating) exists.
        
        Args:
            file_path: A string specifying the path to a raw data file in Amazon S3.
@@ -146,19 +150,18 @@ def get_obs_data(file_path, nodes):
                  time, m_date 
                  FROM add_src_flags a LEFT JOIN nodes n ON a.dst = n.id""").createOrReplaceTempView("edges")
 
-    summary_table = spark.sql("""SELECT mid, 
-                                 SUM(CASE WHEN src_curr_flag = 1 THEN 1 ELSE 0 END) AS num_of_cheaters, 
+    summary_table = spark.sql("""SELECT mid, SUM(CASE WHEN src_curr_flag = 1 THEN 1 ELSE 0 END) AS num_of_cheaters, 
                                  (SUM(CASE WHEN src_curr_flag = 0 AND src_flag = 1 THEN 1 ELSE 0 END) + 
-                                  SUM(CASE WHEN dst_curr_flag = 0 AND dst_flag = 1 THEN 1 ELSE 0 END)) AS potential_cheaters 
+                                 SUM(CASE WHEN dst_curr_flag = 0 AND dst_flag = 1 THEN 1 ELSE 0 END)) AS potential_cheaters 
                                  FROM edges GROUP BY mid""")
     summary_table.registerTempTable("summary_table")
     
     spark.sql("""SELECT mid FROM summary_table 
-                 WHERE num_of_cheaters > 0 AND potential_cheaters > 0""").createOrReplaceTempView("legit_matches")
+                 WHERE num_of_cheaters > 0 AND potential_cheaters > 0""").createOrReplaceTempView("obs_matches")
 
-    legit_logs = spark.sql("""SELECT e.mid, src, src_sd, src_bd, src_curr_flag, src_flag, 
-                              dst, dst_sd, dst_bd, dst_curr_flag, dst_flag, time, m_date 
-                              FROM edges e JOIN legit_matches l ON e.mid = l.mid""")
+    obs_data = spark.sql("""SELECT e.mid, src, src_sd, src_bd, src_curr_flag, src_flag, 
+                            dst, dst_sd, dst_bd, dst_curr_flag, dst_flag, time, m_date 
+                            FROM edges e JOIN obs_matches o ON e.mid = o.mid""")
 
-    legit_logs.write.parquet("s3://social-research-cheating/edges/obs_data.parquet")
+    obs_data.write.parquet("s3://social-research-cheating/edges/obs_data.parquet")
 

@@ -1,52 +1,27 @@
-# The Contagion of Cheating
+The Contagion of Cheating
+--------------
 
-## Problems
-*	How to establish strength of effect, not just whether it is present
-*	Why we need motif analysis
-    *	Observations not independent
-    *	Killing network has peculiar structure
-        *	Indegree distribution peaked at 1
-        *	Temporal ordering: outlinks always come before the inlink
+This repository contains replication materials for the paper "Large-scale network analysis reveals cheating spreads through victimization and observation".
 
-## Tasks
+The `data` folder contains the data files required to reproduce the figures in the paper (See the `figs` folder) by using `paper-descriptive-stats-visualization.ipynb` and `paper-heatmap-visualization.ipynb`.
 
-###	Optimizing code
+- `01-storing-data.ipynb` reads the raw data from text files and stores them as Spark DataFrames in Amazon S3.
 
-*	Organize code in functions to call repeatedly in loops and with different parameters
-*	Save data from intermediary steps to reuse multiple times
-*	Save mapping of shuffled networks to later join with edges/nodes data 
-*	Save mapping of who is visible to whom to later join with edges/nodes data 
+- `02-cheater-performance-analysis.ipynb` compares cheaters and non-cheaters in terms of performance by using two performance measures to prove that cheaters are better performers and use the results as a baseline for cheating detection.
 
-###   Randomizing networks
+- `03-estimation-of-cheating-adoption-time.ipynb` estimates the time of cheating adoption for each cheater using performance information.
 
-*	Randomize within teams, within cheaters and non-cheaters
+- `04-victimization-based-mechanism.ipynb` creates randomized networks by permuting the node labels of each match and counts the total victimization experiences in the data and simulations.
 
-###	Level of harm
+- `05-observation-based-mechanism.ipynb` counts the total observations done by potential cheaters (= players who did not cheat at the time of the match but later adopted cheating) in the data and simulations.
 
-*	Test for different levels of harm (top 90, 80, 70, 60, 50, 40, 30, 20, 10%)
-*	Get descriptives
-    * Indegree distribution – overall + cheater indegree
-* Test for multiple killings from cheaters 
-    * 3-actor motifs (killed by 2 cheaters)
-    * (4-actor motifs (killed by 3 cheaters))
-    * (Test for different levels of harm)
-    
-###	Observing cheaters
+- `06-merging-two-mechanisms.ipynb` merges the results of motif analysis and stores them in csv files.
 
-*	Create observation network (links go from the killer to the observer)
-    * No need to shuffle networks separately, create observation network from each saved shuffled network
-*	Get descriptives
-    * Indegree distribution – overall + cheater-only indegree
-*	Test for observing multiple killings vs. observing killings by multiple cheaters
-    * 2-actor motif with 2/3/4/5 links (2/3/4/5 killings from 1 cheater)
-    * 3-actor motif with 2/3/4/5 links each (2/3/4/5 killings each by 2 different cheaters)
-    * 4-actor motif with 2/3/4/5 links each (2/3/4/5 killings each by 3 different cheaters)
+- `07-descriptive-stats.ipynb` gets some descriptive statistics of the data.
 
+Note that running the jupyter notebooks above requires a Spark environment and we stored large data sets in Amazon S3 due to GitHub's file size restriction. The rest two notebooks below can be run without a Spark cluster and we provide the data files required to replicate the figures of our analysis.
 
-###	Observing and experiencing harm
+- `paper-descriptive-stats-visualization.ipynb` creates the plots of descriptive statistics presented in the paper.
 
-* 2-actor motif with 1 killed-link and 2 observed-links
-* 3-actor motif with 1 killed-link and 2 observed-links (killed by one cheater, observed another)
-
-
+- `paper-heatmap-visualization.ipynb` creates the heatmaps of motif analysis and chi-squared tests.
 

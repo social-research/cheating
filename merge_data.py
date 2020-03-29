@@ -7,15 +7,16 @@ spark = SparkSession(sc)
 
 
 def get_transitions(file_path, num_of_days):
-    """Selects the transitions that occurred within the given period of time.
+    """Selects the observations or experiences that occurred within the given period of time
+       for transition.
 
     Args:
         file_path: A string specifying the path to a file in Amazon S3. 
-        num_of_days: A number representing a time window for influence.
+        num_of_days: A number representing a time window for influence (= transition period).
 
     Returns:
-        transitions: A Spark DataFrame that has the transitions 
-            from non-cheater to cheater that occurred within the given period.
+        transitions: A Spark DataFrame that contains the observations or experiences 
+            that occurred within the given transition period.
     """
     data = spark.read.parquet(file_path)
     data.registerTempTable("data")
