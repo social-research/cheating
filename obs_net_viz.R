@@ -53,7 +53,7 @@ V(td_net)$tid <- node_list$tid
 E(td_net)$weight <- full_edge_list$weight
 
 frame_col <- c("black", "deeppink2")
-edge_col <- c("black", "deeppink2", "turquoise3")
+edge_col <- c("black", "deeppink2", "yellowgreen")
 vertex_frame <- c(NA, "deeppink2")
 vertex_shape <- c("circle", "circle")
 node_size <- c(9, 8)
