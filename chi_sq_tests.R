@@ -54,7 +54,7 @@ run_norm_chi_sq_tests <- function(data, output_filename) {
 
 # MAIN
 #===============================================================================
-# Examine the distribution of motifs from 200 simulations 
+# Examine the distribution of motifs from 1000 simulations 
 # to test whether the assumption of a Poisson distribution is appropriate.
 
 data <- read.csv("data/chi_sq/RO_RE_chi_sq_data.csv", stringsAsFactors = FALSE)
@@ -62,7 +62,7 @@ run_pois_chi_sq_tests(data, "data/chi_sq/RO_RE_chi_sq_poiss.csv")
 run_norm_chi_sq_tests(data, "data/chi_sq/RO_RE_chi_sq_norm.csv")
 
 
-# Examine the distribution of motifs from 200 simulations 
+# Examine the distribution of motifs from 1000 simulations 
 # to test whether the assumption of a Normal distribution is appropriate.
 
 data <- read.csv("data/chi_sq/SO_SE_chi_sq_data.csv", stringsAsFactors = FALSE)
