@@ -25,8 +25,9 @@ run_pois_chi_sq_tests <- function(data, output_filename) {
     hyp_prob <- round(dpois(test_tab$val, lamb), 3)
     chisq_gof_test <- chisq.test(test_tab$freq, p=hyp_prob, rescale.p = TRUE)
     data$pois_pval[i] <- round(chisq_gof_test$p.value, 3)
+    print(chisq_gof_test)
   } 
-  write.csv(data, output_filename, row.names = FALSE)
+  # write.csv(data, output_filename, row.names = FALSE)
 }
 
 
@@ -47,25 +48,33 @@ run_norm_chi_sq_tests <- function(data, output_filename) {
     test_tab <- cal_dnorm(i, data)
     chisq_gof_test <- chisq.test(test_tab$freq, p=test_tab$norm_density, rescale.p = TRUE)
     data$norm_pval[i] <- round(chisq_gof_test$p.value, 3)
+    print(chisq_gof_test)
   } 
-  write.csv(data, output_filename, row.names = FALSE)
+  # write.csv(data, output_filename, row.names = FALSE)
 }
 
 
 # MAIN
 #===============================================================================
 # Examine the distribution of motifs from 1000 simulations 
-# to test whether the assumption of a Poisson distribution is appropriate.
+# to test whether the assumption of a Poisson/Normal distribution is appropriate.
 
 data <- read.csv("data/chi_sq/RO_RE_chi_sq_data.csv", stringsAsFactors = FALSE)
 run_pois_chi_sq_tests(data, "data/chi_sq/RO_RE_chi_sq_poiss.csv")
 run_norm_chi_sq_tests(data, "data/chi_sq/RO_RE_chi_sq_norm.csv")
 
-
-# Examine the distribution of motifs from 1000 simulations 
-# to test whether the assumption of a Normal distribution is appropriate.
-
 data <- read.csv("data/chi_sq/SO_SE_chi_sq_data.csv", stringsAsFactors = FALSE)
 run_pois_chi_sq_tests(data, "data/chi_sq/SO_SE_chi_sq_poiss.csv")
 run_norm_chi_sq_tests(data, "data/chi_sq/SO_SE_chi_sq_norm.csv")
+
+
+# Examine the distribution of basic (1, 0), (0, 1), (1, 1) motifs from 1000 simulations 
+# to test whether the assumption of a Poisson/Normal distribution is appropriate.
+data <- read.csv("data/chi_sq/simple_motifs.csv", stringsAsFactors = FALSE)
+run_pois_chi_sq_tests(data, "")
+run_norm_chi_sq_tests(data, "")
+
+data <- read.csv("data/chi_sq/strict_motifs.csv", stringsAsFactors = FALSE)
+run_pois_chi_sq_tests(data, "")
+run_norm_chi_sq_tests(data, "")
 
