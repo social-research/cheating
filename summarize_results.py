@@ -5,12 +5,12 @@ sc = SparkContext.getOrCreate()
 spark = SparkSession(sc)
 
 
-def add_damage(td, percent):
+def add_damage(rd, percent):
     """Adds the amount of potential damage caused by cheating to the victim for each killing.
        Exploits the fact that players who survive longer are ranked higher.
     
     Args:
-        td: A Spark DataFrame of killings.  
+        rd: A Spark DataFrame of killings.  
         percent: An integer between 0 and 100 representing the degree of harm. For example,
             we assume that players are severely harmed if they were killed by cheating 
             after getting into the top 30% if the value of 'percent' is 30. 
@@ -21,12 +21,12 @@ def add_damage(td, percent):
             and the value 0 otherwise.
     """
     # Count the number of rows (unique victims) for each match.
-    num_of_rows = spark.sql("""SELECT mid, COUNT(*) AS num_of_rows FROM td 
+    num_of_rows = spark.sql("""SELECT mid, COUNT(*) AS num_of_rows FROM rd 
                                GROUP BY mid ORDER BY mid""")
     num_of_rows.registerTempTable("num_of_rows")
 
-    add_num_of_rows = spark.sql("""SELECT t.*, num_of_rows 
-                                   FROM td t JOIN num_of_rows n ON t.mid = n.mid""")
+    add_num_of_rows = spark.sql("""SELECT r.*, num_of_rows 
+                                   FROM rd r JOIN num_of_rows n ON r.mid = n.mid""")
     add_num_of_rows.registerTempTable("add_num_of_rows")
     
     ranks = spark.sql("""SELECT *, RANK(dst) OVER (PARTITION BY mid ORDER BY time DESC) AS rank 
