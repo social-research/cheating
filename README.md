@@ -1,7 +1,10 @@
-The Contagion of Cheating
+Cheating in Online Gaming Spreads through Observation and Victimization
 --------------
 
-This repository contains replication materials for the paper "Large-scale network analysis reveals cheating spreads through victimization and observation".
+This repository contains replication materials for the article:
+
+- J.E. Kim and M. Tsvetkova. (2021). Cheating in online gaming spreads through observation and victimization. Forthcoming in *Network Science*.
+
 
 The `data` folder contains the data files required to reproduce the figures in the paper (See the `figs` folder) by using `paper-descriptive-stats-visualization.ipynb` and `paper-heatmap-visualization.ipynb`.
 
@@ -24,4 +27,3 @@ Note that running the jupyter notebooks above requires a Spark environment and w
 - `paper-descriptive-stats-visualization.ipynb` creates the plots of descriptive statistics presented in the paper.
 
 - `paper-heatmap-visualization.ipynb` creates the heatmaps of motif analysis and chi-squared tests.
-
